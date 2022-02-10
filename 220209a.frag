@@ -1,9 +1,10 @@
+// reference: The Art of Code "The Drive Home"
+
 precision mediump float;
 
 uniform vec2 u_resolution;
 uniform float u_time;
 uniform vec2	u_mouse;
-//uniform vec3	u_camera;
 
 #define S(a, b, t) smoothstep(a, b, t)
 
