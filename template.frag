@@ -1,5 +1,3 @@
-// reference: The Art of Code "ShaderToy Tutorial - The simplest 3D"
-
 #ifdef GL_ES
 precision mediump float;
 precision mediump int;
