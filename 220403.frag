@@ -61,37 +61,11 @@ vec2 sdBall(vec3 p, float a) {
   return vec2(d, d==ball?MAT_BALL:MAT_LINE);
 }
 
-float GetDist(vec3 p) {
-  float base = sdBox(p, vec3(1,.1,.5))-.1;
-  float bar = length(vec2(sdBox(p.xy, vec2(.8, 1.4))-.15, abs(p.z)-.4))-.04;
-
-  float 
-    a = sin(u_time*2.),
-    a1 = min(0., a),
-    a5 = max(0., a);
-
-  float 
-    b1 = sdBall(p-vec3(.6, .5, .0), a1).x,
-    b2 = sdBall(p-vec3(.3, .5, .0), (a+a1)*.05).x,
-    b3 = sdBall(p-vec3(.0, .5, .0), a*.05).x,
-    b4 = sdBall(p-vec3(-.3, .5, .0), (a+a5)*.05).x,
-    b5 = sdBall(p-vec3(-.6, .5, .0), a5).x;
-
-  float balls = min(b1, min(b2, min(b3, min(b4, b5))));
-
-  float d = min(base, bar);
-  d = min(d, balls);
-
-  d = max(d, -p.y);   // cut off the bottom
-  
-  return d;
-}
-
 vec2 Min(vec2 a, vec2 b) {
   return a.x<b.x ? a : b;
 }
 
-int GetMat(vec3 p) {
+vec2 GetDist(vec3 p) {
   float base = sdBox(p, vec3(1,.1,.5))-.1;
   float bar = length(vec2(sdBox(p.xy, vec2(.8, 1.4))-.15, abs(p.z)-.4))-.04;
 
@@ -122,31 +96,33 @@ int GetMat(vec3 p) {
     mat = MAT_BARS;
   else if (d==balls.x)
     mat = int(balls.y);
-
-  return mat;
+  
+  return vec2(d, mat);
 }
 
-float RayMarch(vec3 ro, vec3 rd) {
+vec2 RayMarch(vec3 ro, vec3 rd) {
 	float dO=0.;
+  vec2 dSMat = vec2(0);
     
   for(int i=0; i<MAX_STEPS; i++) {
     vec3 p = ro + rd*dO;
-    float dS = GetDist(p);
-    dO += dS;
-    if(dO>MAX_DIST || abs(dS)<SURF_DIST) break;
+    dSMat = GetDist(p);
+
+    dO += dSMat.x;
+    if(dO>MAX_DIST || abs(dSMat.x)<SURF_DIST) break;
   }
   
-  return dO;
+  return vec2(dO, dSMat.y);
 }
 
 vec3 GetNormal(vec3 p) {
-	float d = GetDist(p);
+	float d = GetDist(p).x;
   vec2 e = vec2(.001, 0);
   
   vec3 n = d - vec3(
-    GetDist(p-e.xyy),
-    GetDist(p-e.yxy),
-    GetDist(p-e.yyx));
+    GetDist(p-e.xyy).x,
+    GetDist(p-e.yxy).x,
+    GetDist(p-e.yyx).x);
   
   return normalize(n);
 }
@@ -161,6 +137,41 @@ vec3 GetRayDir(vec2 uv, vec3 p, vec3 l, float z) {
   return d;
 }
 
+vec3 Render(inout vec3 ro, inout vec3 rd, inout float ref) {
+  vec2 dMat = RayMarch(ro, rd);
+  vec3 col = vec3(0.);
+
+  if(dMat.x<MAX_DIST) {
+    vec3 p = ro + rd * dMat.x;
+    vec3 n = GetNormal(p);
+    vec3 r = reflect(rd, n);
+
+    float fresnel = pow(1.-dot(n, -rd), 5.);
+    float dif = dot(n, normalize(vec3(1,2,3)))*.5+.5;
+    col = vec3(dif);
+
+    int mat = int(dMat.y);
+
+    if (mat==MAT_BASE) {
+      col *= vec3(.02, .04, .2);
+      ref *= fresnel;
+    } else if (mat==MAT_BARS) {
+      col *= vec3(.1, .3, .6);
+      ref *= .7;
+    } else if (mat==MAT_BALL) {
+      col *= vec3(1., .7, .3);
+      ref *= .9;
+    } else if (mat==MAT_LINE) {
+      col *= .2;
+      ref *= .0;
+    }
+    ro = p+n*SURF_DIST;
+    rd = r;
+  }
+
+  return col;
+}
+
 void main()
 {
   vec2 uv = (gl_FragCoord.xy-.5*u_resolution.xy)/u_resolution.y;
@@ -171,29 +182,14 @@ void main()
   ro.xz *= Rot(-m.x*6.2831);
   
   vec3 rd = GetRayDir(uv, ro, vec3(0,0.75,0), 1.5);
-  vec3 col = vec3(0);
+  vec3 col = vec3(0.);
   
-  float d = RayMarch(ro, rd);
+  float ref = 1.;
+  col = Render(ro, rd, ref);
+  vec3 bounce = Render(ro, rd, ref);
 
-  if(d<MAX_DIST) {
-    vec3 p = ro + rd * d;
-    vec3 n = GetNormal(p);
-    vec3 r = reflect(rd, n);
+  col += bounce*ref;
 
-    float dif = dot(n, normalize(vec3(1,2,3)))*.5+.5;
-    col = vec3(dif);
-
-    int mat = GetMat(p);
-    if (mat==MAT_BASE)
-      col *= .1;
-    else if (mat==MAT_BARS)
-      col *= vec3(0., 0., 1.);
-    else if (mat==MAT_BALL)
-      col *= vec3(1., 0., 0.);
-    else if (mat==MAT_LINE)
-      col *= .05;
-  }
-  
   col = pow(col, vec3(.4545));	// gamma correction
   
   gl_FragColor = vec4(col,1.0);
