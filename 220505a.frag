@@ -15,6 +15,7 @@ uniform vec2	u_mouse;
 
 #define S smoothstep
 #define T u_time*.2
+#define TAU 6.283185
 
 mat2 Rot(float a) {
   float s=sin(a), c=cos(a);
@@ -91,6 +92,25 @@ vec3 GetRayDir(vec2 uv, vec3 p, vec3 l, float z) {
   return d;
 }
 
+float Hash21(vec2 p) {
+  p = fract(p*vec2(123.34,234.53));
+  p += dot(p, p+23.4);
+  return fract(p.x*p.y);
+}
+
+float Glitter(vec2 p, float a) {
+  p *= 10.;
+  vec2 id = floor(p);
+  p = fract(p)-.5;
+  float n = Hash21(id);
+
+  float d = length(p);
+  float m = S(.5*n,.0,d);
+
+  m *= pow(sin(a+fract(n*10.)*TAU)*.5+.5, 100.);
+  return m;
+}
+
 void main()
 {
   vec2 uv = (gl_FragCoord.xy-.5*u_resolution.xy)/u_resolution.y;
@@ -116,18 +136,29 @@ void main()
 
     col = vec3(dif);
 
-    if(cd > 1.03) {
+    if(cd > 1.035) {
       // col *= vec3(1, 0, 0);
       float s = BallGyroid(-lightDir);
-      float w = cd*.04;
+      float w = cd*.01;
       float shadow = S(-w, w, s);
       col *= shadow;
 
+      p.z -= T;
+      col += Glitter(p.xz*5., dot(ro,vec3(2))-T*4.)*4.*shadow;
       col /= cd*cd;
     }
   }
-  
+  float cd = dot(uv, uv);
+
+  float light = .003/cd;
+  col += light*S(.0,.5,d-2.);
+
+  float s = BallGyroid(normalize(ro));
+  col += light*S(.0, .03, s);
   col = pow(col, vec3(.4545));	// gamma correction
+
+  // col *= 0.;
+  // col += Glitter(uv);
   
   gl_FragColor = vec4(col,1.0);
 }
