@@ -111,15 +111,21 @@ float Glitter(vec2 p, float a) {
   return m;
 }
 
+vec3 RayPlane(vec3 ro, vec3 rd, vec3 p, vec3 n) {
+  float t = max(0., dot(p-ro, n)/dot(rd, n));
+  return ro + rd*t;
+}
+
 void main()
 {
   vec2 uv = (gl_FragCoord.xy-.5*u_resolution.xy)/u_resolution.y;
 	vec2 m = u_mouse.xy/u_resolution.xy;
+  float cds = dot(uv, uv);
 
   vec3 ro = vec3(0, 3, -3)*.6;
   ro.yz *= Rot(-m.y*3.14+1.);
   ro.y = max(-.9, ro.y);
-  ro.xz *= Rot(-m.x*6.2831);
+  ro.xz *= Rot(-m.x*6.2831+T*.2);
   
   vec3 rd = GetRayDir(uv, ro, vec3(0,0.,0), 1.);
   vec3 col = vec3(0);
@@ -146,19 +152,30 @@ void main()
       p.z -= T;
       col += Glitter(p.xz*5., dot(ro,vec3(2))-T*4.)*4.*shadow;
       col /= cd*cd;
+    } else {
+      float sss = S(.05, .0, cds);
+      sss *= sss;
+
+      float s = BallGyroid(p+sin(p*10.+T)*.02);
+      sss *= S(-.03, 0., s);
+      col += sss*vec3(1., .1, .2);
     }
   }
-  float cd = dot(uv, uv);
 
-  float light = .003/cd;
-  col += light*S(.0,.5,d-2.);
-
+  float light = .003/cds;
+  vec3 lightCol = vec3(1., .8, .7);
+  col += light*S(.0,.5,d-2.)*lightCol;
   float s = BallGyroid(normalize(ro));
-  col += light*S(.0, .03, s);
-  col = pow(col, vec3(.4545));	// gamma correction
+  col += light*S(.0, .03, s)*lightCol;
 
-  // col *= 0.;
-  // col += Glitter(uv);
+  uv *= Rot(T);
+  vec3 pp = RayPlane(ro, rd, vec3(0.), normalize(ro));
+  float sb = BallGyroid(normalize(pp));
+  sb *= S(.0, .4, cds);
+  col += max(0.,sb*2.);
+
+  col = pow(col, vec3(.4545));	// gamma correction
+  col *= 1.-cds*.7;
   
   gl_FragColor = vec4(col,1.0);
 }
